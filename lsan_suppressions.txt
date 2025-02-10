@@ -1,0 +1,3 @@
+leak:libSDL3
+leak:libnvidia
+leak:libdbus
