@@ -6,10 +6,11 @@
 #include "hyper_common.hh"
 #include "hyper_memory_resources.hh"
 #include "hyper.hh"
+#include "hyper_renderer.hh"
 #include "stellar_hot_reload.hh"
 #include "stellar_game_logic.hh"
 
-void quit ();
+static void quit ();
 
 // Constants
 #define GAME_LOGIC_SHARED_LIBRARY_NAME "libgamelogic.so"
@@ -53,8 +54,8 @@ static void
 init (std::pmr::monotonic_buffer_resource &game_linear_arena)
 {
   // Initialise game config
-  game_config._width = 1024;
-  game_config._height = 768;
+  game_config.resolution._width = 1024;
+  game_config.resolution._height = 768;
   game_config._target_fps = fixed_timestep;
   game_config._vsync = false;
   game_state._running = true;
@@ -63,7 +64,7 @@ init (std::pmr::monotonic_buffer_resource &game_linear_arena)
   if (!SDL_Init (SDL_INIT_VIDEO))
     panic ("SDL_Init", SDL_GetError ());
 
-  sdl_window = SDL_CreateWindow ("Stellar Arsenal", game_config._width, game_config._height, 0);
+  sdl_window = SDL_CreateWindow ("Stellar Arsenal", game_config.resolution._width, game_config.resolution._height, 0);
   if (!sdl_window)
     panic ("SDL_CreateWindow", SDL_GetError ());
 
@@ -74,14 +75,14 @@ init (std::pmr::monotonic_buffer_resource &game_linear_arena)
   sdl_texture = SDL_CreateTexture (sdl_renderer,
                                    SDL_PIXELFORMAT_RGBA8888,
                                    SDL_TEXTUREACCESS_STREAMING,
-                                   game_config._width,
-                                   game_config._height);
+                                   game_config.resolution._width,
+                                   game_config.resolution._height);
   if (!sdl_texture)
     panic ("SDL_CreateTexture", SDL_GetError ());
 
   // Frame and context
-  game_framebuffer._width = game_config._width;
-  game_framebuffer._height = game_config._height;
+  game_framebuffer._width = game_config.resolution._width;
+  game_framebuffer._height = game_config.resolution._height;
   game_framebuffer._pitch = game_framebuffer._width * (i32) sizeof (u32);
   std::pmr::vector<u32> data {&game_linear_arena};
   data.resize ((u32) game_framebuffer._width * (u32) game_framebuffer._height, 0x00);
@@ -114,14 +115,33 @@ run ()
   SDL_Event event;
 
   // TEMP PROTOTYPE
+  hyper::renderer_init (static_cast<f32> (game_config.resolution._width),
+                        static_cast<f32> (game_config.resolution._height));
 
-  //
+  stellar::camera game_camera;
+
+  // NOTE: these values aren't random, especially the height. The
+  // height is picked so that it maintains the same aspect ratio 4:3
+  game_camera.fov._width = 5000.0f;
+  game_camera.fov._height = 3750.0f;
+  // In world space
+  game_camera.position._x = 0.0f;
+  game_camera.position._y = 0.0f;
+
+  stellar::world game_world;
+  game_world._width = 100'000.0f;
+  game_world._height = 100'000.0f;
+  game_world._meters_per_pixel = game_camera.fov._width / static_cast<f32> (game_config.resolution._width);
+  // END PROTOTYPE
 
   while (game_state._running)
     {
-#ifdef DEBUG
+#if 0
       if (stellar::hot_reload_library_was_updated ())
-        stellar::hot_reload_load (game_logic_shared_library);
+        {
+          stellar::hot_reload_load (game_logic_shared_library);
+          hyper::renderer_init (game_config.resolution._width, game_config.resolution._height);
+        }
 #endif
       u64 const current_time = SDL_GetTicks ();
       f32 frame_time = (f32) (current_time - last_time) / 1000.0f;
