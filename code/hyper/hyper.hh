@@ -2,6 +2,7 @@
 
 #include "hyper_common.hh"
 #include "hyper_math.hh"
+#include "hyper_stack_arena.hh"
 #include <vector>
 
 #define HYPER_UPDATE_FUNCTION_NAME "game_update"
@@ -9,6 +10,17 @@
 
 namespace hyper
 {
+  // FIXME: this part should be decoupled, somehow!! I don't know how!
+  // This is the worst part of the engine
+  struct Game_data
+  {
+    struct
+    {
+      Vec2<f32> *data;
+      size_t size;
+    } stars;
+  };
+
   enum class Shape
     {
       triangle,
@@ -28,12 +40,12 @@ namespace hyper
 
   struct Renderer_context
   {
+    Stack_arena *stack_arena;
     Framebuffer *framebuffer;
     f32 camera_x;
     f32 camera_y;
     f32 camera_zoom;
-    f32 screen_width;
-    f32 screen_height;
+    f32 meters_per_pixel;
   };
 
   struct Frame_context

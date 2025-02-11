@@ -6,14 +6,14 @@
 
 namespace hyper
 {
-  template<typename T>
+  template <typename T>
   struct Vec2
   {
     T x;
     T y;
   };
 
-  template<typename T>
+  template <typename T>
   struct Vec3
   {
     T x;
@@ -21,7 +21,7 @@ namespace hyper
     T z;
   };
 
-  template<typename T>
+  template <typename T>
   struct Vec4
   {
     T x;
@@ -75,5 +75,11 @@ namespace hyper
   min (T &&a, T &&b)
   {
     return a < b ? a : b;
+  }
+
+  inline constexpr f32
+  sqrt (f32 value)
+  {
+    return std::sqrtf (value);
   }
 };

@@ -4,7 +4,7 @@
 
 namespace stellar
 {
-  using function_ptr_signature = void (*)(hyper::Frame_context &);
+  using function_ptr_signature = void (*)(hyper::Frame_context &, hyper::Game_data &);
 
   struct Hot_reload_library_data
   {

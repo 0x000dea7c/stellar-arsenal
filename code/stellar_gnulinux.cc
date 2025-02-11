@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <iostream>
+#include <random>
 #include <SDL3/SDL.h>
 
 #include "stellar.hh"
@@ -9,11 +10,14 @@
 #include "hyper_renderer.hh"
 #include "stellar_hot_reload.hh"
 #include "stellar_game_logic.hh"
+#include "hyper_stack_arena.hh"
 
 static void quit ();
 
 // Constants
 #define GAME_LOGIC_SHARED_LIBRARY_NAME "libgamelogic.so"
+#define GAME_WORLD_WIDTH 1250.0f
+#define GAME_WORLD_HEIGHT 937.5f
 
 static f32 constexpr fixed_timestep = 1.0f / 60.0f;
 
@@ -26,11 +30,16 @@ static SDL_Renderer *sdl_renderer = nullptr;
 static stellar::Config game_config;
 static stellar::State game_state;
 static hyper::Fixed_memory_resource fixed_resource;
-static std::byte linear_arena_backing_buffer[hyper::megabytes (128)];
+static std::array<std::byte, hyper::megabytes (128)> linear_arena_backing_buffer;
+static std::array<std::byte, hyper::megabytes (32)> stack_arena_backing_buffer;
 static hyper::Framebuffer game_framebuffer;
 static hyper::Renderer_context game_renderer_context;
 static hyper::Frame_context game_frame_context;
 static stellar::Hot_reload_library_data game_logic_shared_library;
+static std::array<hyper::Vec2<f32>, 1024> game_background_stars;
+static stellar::World game_world;
+static stellar::Camera game_camera;
+static hyper::Game_data game_data;
 
 // Internal functions
 [[noreturn]] static void
@@ -49,13 +58,13 @@ toggle_vsync (void)
 }
 
 static void
-init (std::pmr::monotonic_buffer_resource &game_linear_arena)
+init (std::pmr::monotonic_buffer_resource &game_linear_arena, hyper::Stack_arena &stack_arena)
 {
   // Initialise game config
   game_config.resolution.width = 1024;
   game_config.resolution.height = 768;
   game_config.target_fps = fixed_timestep;
-  game_config.vsync = false;
+  game_config.vsync = true;
   game_state.running = true;
 
   // Initialise SDL stuff using game's config
@@ -88,6 +97,7 @@ init (std::pmr::monotonic_buffer_resource &game_linear_arena)
   game_framebuffer.simd_chunks = game_framebuffer.pixels.size () / 8; // AVX2
 
   game_renderer_context.framebuffer = &game_framebuffer;
+  game_renderer_context.stack_arena = &stack_arena;
 
   // Hot reloading mechanism
   if (!stellar::hot_reload_init (game_logic_shared_library, GAME_LOGIC_SHARED_LIBRARY_NAME))
@@ -98,6 +108,31 @@ init (std::pmr::monotonic_buffer_resource &game_linear_arena)
   game_frame_context.fixed_timestep = fixed_timestep;
   game_frame_context.alpha_rendering = 0.0f;
   game_frame_context.last_frame_time = SDL_GetTicks ();
+
+  game_camera.x = static_cast<f32> (game_renderer_context.framebuffer->width >> 1);
+  game_camera.y = static_cast<f32> (game_renderer_context.framebuffer->height >> 1);
+  game_camera.zoom = 1.0f;
+
+  game_world.width = GAME_WORLD_WIDTH;
+  game_world.height = GAME_WORLD_HEIGHT;
+  game_world.meters_per_pixel = 1.0f / game_camera.zoom; // FIXME: is this right?
+  game_renderer_context.meters_per_pixel = game_world.meters_per_pixel;
+
+  game_renderer_context.meters_per_pixel = game_world.meters_per_pixel;
+
+  // Initialise stars
+  std::random_device random_seed;
+  std::mt19937 generator (random_seed ());
+  std::uniform_real_distribution<f32> distribution_x (0, game_world.width);
+  std::uniform_real_distribution<f32> distribution_y (0, game_world.height);
+  for (size_t i = 0; i < game_background_stars.size (); ++i)
+    {
+      game_background_stars[i].x = distribution_x (generator);
+      game_background_stars[i].y = distribution_y (generator);
+    }
+
+  game_data.stars.data = game_background_stars.data ();
+  game_data.stars.size = game_background_stars.size ();
 }
 
 static void
@@ -111,17 +146,6 @@ run ()
   char window_title[32];
   SDL_Event event;
 
-  // TEMP PROTOTYPE
-  stellar::Camera game_camera;
-  game_camera.x = 0.0f;
-  game_camera.y = 0.0f;
-  game_camera.zoom = 1.0f;
-
-  stellar::World game_world;
-  game_world.width = 100'000.0f;
-  game_world.height = 100'000.0f;
-  // game_world.meters_per_pixel = game_camera.fov.width / static_cast<f32> (game_config.resolution.width);
-  // END PROTOTYPE
 
   while (game_state.running)
     {
@@ -177,7 +201,19 @@ run ()
                   game_camera.zoom = hyper::min (game_camera.zoom + 0.05f, 2.0f);
                   break;
                 case SDLK_F3:
-                  game_camera.zoom = hyper::max (game_camera.zoom - 0.05f, 1.0f);
+                  game_camera.zoom = hyper::max (game_camera.zoom - 0.05f, 0.5f);
+                  break;
+                case SDLK_UP:
+                  game_camera.y -= 150.0f * game_frame_context.fixed_timestep;
+                  break;
+                case SDLK_DOWN:
+                  game_camera.y += 150.0f * game_frame_context.fixed_timestep;
+                  break;
+                case SDLK_LEFT:
+                  game_camera.x -= 150.0f * game_frame_context.fixed_timestep;
+                  break;
+                case SDLK_RIGHT:
+                  game_camera.x += 150.0f * game_frame_context.fixed_timestep;
                   break;
                 default:
                   break;
@@ -189,7 +225,7 @@ run ()
       while (game_frame_context.physics_accumulator >= game_frame_context.fixed_timestep)
         {
 
-          game_logic_shared_library.update (game_frame_context);
+          game_logic_shared_library.update (game_frame_context, game_data);
           game_frame_context.physics_accumulator -= game_frame_context.fixed_timestep;
         }
 
@@ -198,7 +234,7 @@ run ()
       game_renderer_context.camera_y = game_camera.y;
       game_renderer_context.camera_zoom = game_camera.zoom;
       game_frame_context.alpha_rendering = game_frame_context.physics_accumulator / game_frame_context.fixed_timestep;
-      game_logic_shared_library.render (game_frame_context);
+      game_logic_shared_library.render (game_frame_context, game_data);
 
       // copy my updated framebuffer to the SDL texture
       SDL_UpdateTexture (sdl_texture, nullptr, game_framebuffer.pixels.data (), game_framebuffer.pitch);
@@ -208,6 +244,8 @@ run ()
       SDL_RenderPresent (sdl_renderer);
 
       ++frame_count;
+
+      hyper::stack_arena_release (game_renderer_context.stack_arena);
     }
 }
 
@@ -224,11 +262,19 @@ int
 main ()
 {
   // Memory allocations (all I'm going to have) inside the game
-  std::pmr::monotonic_buffer_resource game_linear_arena {linear_arena_backing_buffer,
-                                                         sizeof (linear_arena_backing_buffer),
-                                                         &fixed_resource};
+  // The linear arena is for the framebuffer
+  std::pmr::monotonic_buffer_resource game_linear_arena { linear_arena_backing_buffer.data (),
+                                                          linear_arena_backing_buffer.size (),
+                                                          &fixed_resource };
 
-  init (game_linear_arena);
+  // This is for scratch operations that only live for a particular frame
+  hyper::Stack_arena_arguments stack_arena_arguments { &fixed_resource,
+                                                       stack_arena_backing_buffer.data (),
+                                                       stack_arena_backing_buffer.size ()};
+
+  hyper::Stack_arena stack_arena {stack_arena_arguments};
+
+  init (game_linear_arena, stack_arena);
 
   run ();
 

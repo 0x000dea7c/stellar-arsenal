@@ -20,5 +20,5 @@ extern "C"
 {
   STELLAR_API void game_update (hyper::Frame_context &);
 
-  STELLAR_API void game_render (hyper::Frame_context &);
+  STELLAR_API void game_render (hyper::Frame_context &, hyper::Game_data &);
 }
