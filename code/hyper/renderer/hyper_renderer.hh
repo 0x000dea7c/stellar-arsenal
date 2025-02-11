@@ -8,12 +8,9 @@
 
 namespace hyper
 {
-  // TODO: this will most likely change
-  void renderer_init (f32 width, f32 height);
+  void set_background_colour (Renderer_context *, Colour);
 
-  void set_background_colour (renderer_context *, colour);
+  void draw (Renderer_context *);
 
-  void draw (renderer_context *);
-
-  void draw_triangle_outline (renderer_context *, std::array<vec2<f32>, 3> const&, colour);
+  void draw_triangle_outline (Renderer_context *, std::array<Vec2<f32>, 3> const&, Colour);
 };

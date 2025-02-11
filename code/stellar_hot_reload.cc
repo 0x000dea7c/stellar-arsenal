@@ -10,37 +10,24 @@
 
 namespace stellar
 {
-  static hot_reload_watcher watcher;
-
-  // this hack is needed for calling dylsym
-  union
-  {
-    void *obj_ptr;
-    update_function_ptr func_ptr;
-  } upd_tmp;
-
-  union
-  {
-    void *obj_ptr;
-    render_function_ptr func_ptr;
-  } rend_tmp;
+  static Hot_reload_watcher watcher;
 
   static bool
   watcher_init (char const *path)
   {
-    watcher._path = path;
+    watcher.path = path;
 
-    watcher._inotify_fd = inotify_init1 (IN_NONBLOCK);
-    if (watcher._inotify_fd == -1)
+    watcher.inotify_fd = inotify_init1 (IN_NONBLOCK);
+    if (watcher.inotify_fd == -1)
       {
         std::cerr << "couldn't initialise inotify: " << strerror (errno) << '\n';
         return false;
       }
 
-    watcher._watch_fd = inotify_add_watch (watcher._inotify_fd, watcher._path, IN_ALL_EVENTS);
-    if (watcher._watch_fd == -1)
+    watcher.watch_fd = inotify_add_watch (watcher.inotify_fd, watcher.path, IN_ALL_EVENTS);
+    if (watcher.watch_fd == -1)
       {
-        close (watcher._inotify_fd);
+        close (watcher.inotify_fd);
         std::cerr << "couldn't add watch: " << strerror (errno) << '\n';
         return false;
       }
@@ -51,22 +38,22 @@ namespace stellar
   static bool
   restart_watcher ()
   {
-    if (inotify_rm_watch (watcher._inotify_fd, watcher._watch_fd) == -1)
+    if (inotify_rm_watch (watcher.inotify_fd, watcher.watch_fd) == -1)
       {
         std::cerr << "couldn't remove watch: " << strerror (errno) << '\n';
         return false;
       }
 
-    return watcher_init (watcher._path);
+    return watcher_init (watcher.path);
   }
 
   bool
-  hot_reload_init (hot_reload_library_data &library, char const *path)
+  hot_reload_init (Hot_reload_library_data &library, char const *path)
   {
-    library._path = path;
-    library._handle = NULL;
-    library._render = NULL;
-    library._update = NULL;
+    library.path = path;
+    library.handle = NULL;
+    library.render = NULL;
+    library.update = NULL;
 
     if (!watcher_init (path))
       {
@@ -82,7 +69,7 @@ namespace stellar
     char buffer[sizeof (struct inotify_event) + NAME_MAX + 1];
     bool modified = false;
 
-    while (read (watcher._inotify_fd, buffer, sizeof (buffer)) > 0)
+    while (read (watcher.inotify_fd, buffer, sizeof (buffer)) > 0)
       {
         struct inotify_event *event = (struct inotify_event *) buffer;
         if (event->mask & (IN_OPEN | IN_ATTRIB))
@@ -104,21 +91,21 @@ namespace stellar
   }
 
   bool
-  hot_reload_load (hot_reload_library_data &library)
+  hot_reload_load (Hot_reload_library_data &library)
   {
-    if (library._handle)
+    if (library.handle)
       {
-        dlclose (library._handle);
-        library._handle = NULL;
-        library._render = NULL;
-        library._update = NULL;
+        dlclose (library.handle);
+        library.handle = NULL;
+        library.render = NULL;
+        library.update = NULL;
       }
 
     // RTLD_NOW: find all symbols immediately.
-    library._handle = dlopen (library._path, RTLD_NOW);
-    if (!library._handle)
+    library.handle = dlopen (library.path, RTLD_NOW);
+    if (!library.handle)
       {
-        std::cerr << "couldn't open lib " << library._path << ':' << strerror (errno) << '\n';
+        std::cerr << "couldn't open lib " << library.path << ':' << strerror (errno) << '\n';
         return false;
       }
 
@@ -126,38 +113,39 @@ namespace stellar
     dlerror ();
 
     // look for symbols inside this library
-    upd_tmp.obj_ptr = dlsym (library._handle, HYPER_UPDATE_FUNCTION_NAME);
-    char *err = dlerror ();
-    if (err)
+    void *function_ptr = dlsym (library.handle, HYPER_UPDATE_FUNCTION_NAME);
+    char *error = dlerror ();
+    if (error)
       {
-        std::cerr << "couldn't find game_update symbol for lib " << library._path << ':' << strerror (errno) << '\n';
+        std::cerr << "couldn't find game_update symbol for lib " << library.path << ':' << error << '\n';
         return false;
       }
+
+    library.update = reinterpret_cast<function_ptr_signature> (function_ptr);
 
     dlerror ();
 
-    rend_tmp.obj_ptr = dlsym (library._handle, HYPER_RENDER_FUNCTION_NAME);
-    err = dlerror ();
-    if (err)
+    function_ptr = dlsym (library.handle, HYPER_RENDER_FUNCTION_NAME);
+    error = dlerror ();
+    if (error)
       {
-        std::cerr << "couldn't find game_render symbol for lib " << library._path << ':' << strerror (errno) << '\n';
+        std::cerr << "couldn't find game_render symbol for lib " << library.path << ':' << error << '\n';
         return false;
       }
 
-    library._update = upd_tmp.func_ptr;
-    library._render = rend_tmp.func_ptr;
+    library.render = reinterpret_cast<function_ptr_signature> (function_ptr);
 
     return true;
   }
 
   void
-  hot_reload_quit (hot_reload_library_data &library)
+  hot_reload_quit (Hot_reload_library_data &library)
   {
-    if (library._handle)
-      dlclose (library._handle);
+    if (library.handle)
+      dlclose (library.handle);
 
-    inotify_rm_watch (watcher._inotify_fd, watcher._watch_fd);
-    close (watcher._inotify_fd);
-    close (watcher._watch_fd);
+    inotify_rm_watch (watcher.inotify_fd, watcher.watch_fd);
+    close (watcher.inotify_fd);
+    close (watcher.watch_fd);
   }
 };

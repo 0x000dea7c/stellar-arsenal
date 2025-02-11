@@ -4,29 +4,28 @@
 
 namespace stellar
 {
-  typedef void (*update_function_ptr)(hyper::frame_context &);
-  typedef void (*render_function_ptr)(hyper::frame_context &);
+  using function_ptr_signature = void (*)(hyper::Frame_context &);
 
-  struct hot_reload_library_data
+  struct Hot_reload_library_data
   {
-    void *_handle;
-    char const *_path;
-    update_function_ptr _update;
-    render_function_ptr _render;
+    void *handle;
+    char const *path;
+    function_ptr_signature update;
+    function_ptr_signature render;
   };
 
-  struct hot_reload_watcher
+  struct Hot_reload_watcher
   {
-    int32_t _inotify_fd;
-    int32_t _watch_fd;
-    char const *_path;
+    int32_t inotify_fd;
+    int32_t watch_fd;
+    char const *path;
   };
 
-  bool hot_reload_init (hot_reload_library_data &, char const *);
+  bool hot_reload_init (Hot_reload_library_data &, char const *);
 
   bool hot_reload_library_was_updated ();
 
-  bool hot_reload_load (hot_reload_library_data &);
+  bool hot_reload_load (Hot_reload_library_data &);
 
-  void hot_reload_quit (hot_reload_library_data &);
+  void hot_reload_quit (Hot_reload_library_data &);
 };

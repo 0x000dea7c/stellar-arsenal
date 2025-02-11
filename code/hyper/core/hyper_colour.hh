@@ -4,15 +4,15 @@
 
 namespace hyper
 {
-  struct colour
+  struct Colour
   {
-    u8 _r;
-    u8 _g;
-    u8 _b;
-    u8 _a;
+    u8 r;
+    u8 g;
+    u8 b;
+    u8 a;
   };
 
-  enum colour_preset
+  enum Colour_preset
     {
       BLACK = 0,
       WHITE,
@@ -25,7 +25,8 @@ namespace hyper
       COUNT
     };
 
-  inline colour get_colour_from_preset (colour_preset preset)
+  inline Colour
+  get_colour_from_preset (Colour_preset preset)
   {
     switch (preset)
       {
@@ -46,11 +47,11 @@ namespace hyper
       default:
         return { 0x00, 0x00, 0x00, 0xFF };
       }
-
   }
 
-  inline u32 get_colour_uint (colour colour)
+  inline u32
+  get_colour_uint (Colour colour)
   {
-    return (u32) (colour._r) << 24 | (u32) (colour._g) << 16 | (u32) (colour._b) << 8 | (u32) colour._a;
+    return (u32) (colour.r) << 24 | (u32) (colour.g) << 16 | (u32) (colour.b) << 8 | (u32) colour.a;
   }
 };

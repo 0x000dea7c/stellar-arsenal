@@ -23,15 +23,14 @@ static SDL_Texture *sdl_texture = nullptr;
 static SDL_Renderer *sdl_renderer = nullptr;
 
 // Game globals
-static stellar::config game_config;
-static stellar::state game_state;
-static hyper::fixed_memory_resource fixed_resource;
+static stellar::Config game_config;
+static stellar::State game_state;
+static hyper::Fixed_memory_resource fixed_resource;
 static std::byte linear_arena_backing_buffer[hyper::megabytes (128)];
-static hyper::framebuffer game_framebuffer;
-static hyper::renderer_context game_renderer_context;
-static hyper::frame_context game_frame_context;
-static hyper::vertex_buffer game_vertex_buffer;
-static stellar::hot_reload_library_data game_logic_shared_library;
+static hyper::Framebuffer game_framebuffer;
+static hyper::Renderer_context game_renderer_context;
+static hyper::Frame_context game_frame_context;
+static stellar::Hot_reload_library_data game_logic_shared_library;
 
 // Internal functions
 [[noreturn]] static void
@@ -45,26 +44,25 @@ panic (char const *title, char const *msg)
 static void
 toggle_vsync (void)
 {
-  SDL_SetRenderVSync (sdl_renderer, game_config._vsync ? 0 : 1);
-  game_config._vsync = !game_config._vsync;
-  printf ("VSync value changed to: %d\n", game_config._vsync);
+  SDL_SetRenderVSync (sdl_renderer, game_config.vsync ? 0 : 1);
+  game_config.vsync = !game_config.vsync;
 }
 
 static void
 init (std::pmr::monotonic_buffer_resource &game_linear_arena)
 {
   // Initialise game config
-  game_config.resolution._width = 1024;
-  game_config.resolution._height = 768;
-  game_config._target_fps = fixed_timestep;
-  game_config._vsync = false;
-  game_state._running = true;
+  game_config.resolution.width = 1024;
+  game_config.resolution.height = 768;
+  game_config.target_fps = fixed_timestep;
+  game_config.vsync = false;
+  game_state.running = true;
 
   // Initialise SDL stuff using game's config
   if (!SDL_Init (SDL_INIT_VIDEO))
     panic ("SDL_Init", SDL_GetError ());
 
-  sdl_window = SDL_CreateWindow ("Stellar Arsenal", game_config.resolution._width, game_config.resolution._height, 0);
+  sdl_window = SDL_CreateWindow ("Stellar Arsenal", game_config.resolution.width, game_config.resolution.height, 0);
   if (!sdl_window)
     panic ("SDL_CreateWindow", SDL_GetError ());
 
@@ -75,32 +73,31 @@ init (std::pmr::monotonic_buffer_resource &game_linear_arena)
   sdl_texture = SDL_CreateTexture (sdl_renderer,
                                    SDL_PIXELFORMAT_RGBA8888,
                                    SDL_TEXTUREACCESS_STREAMING,
-                                   game_config.resolution._width,
-                                   game_config.resolution._height);
+                                   game_config.resolution.width,
+                                   game_config.resolution.height);
   if (!sdl_texture)
     panic ("SDL_CreateTexture", SDL_GetError ());
 
   // Frame and context
-  game_framebuffer._width = game_config.resolution._width;
-  game_framebuffer._height = game_config.resolution._height;
-  game_framebuffer._pitch = game_framebuffer._width * (i32) sizeof (u32);
+  game_framebuffer.width = game_config.resolution.width;
+  game_framebuffer.height = game_config.resolution.height;
+  game_framebuffer.pitch = game_framebuffer.width * (i32) sizeof (u32);
   std::pmr::vector<u32> data {&game_linear_arena};
-  data.resize ((u32) game_framebuffer._width * (u32) game_framebuffer._height, 0x00);
-  game_framebuffer._pixels = std::move (data);
-  game_framebuffer._simd_chunks = game_framebuffer._pixels.size () / 8; // AVX2
+  data.resize ((u32) game_framebuffer.width * (u32) game_framebuffer.height, 0x00);
+  game_framebuffer.pixels = std::move (data);
+  game_framebuffer.simd_chunks = game_framebuffer.pixels.size () / 8; // AVX2
 
-  game_renderer_context._framebuffer = &game_framebuffer;
-  game_renderer_context._vertex_buffer = &game_vertex_buffer;
+  game_renderer_context.framebuffer = &game_framebuffer;
 
   // Hot reloading mechanism
   if (!stellar::hot_reload_init (game_logic_shared_library, GAME_LOGIC_SHARED_LIBRARY_NAME))
     panic ("hot_reload_init", "couldn't initialise hot reloading");
 
-  game_frame_context._renderer_context = &game_renderer_context;
-  game_frame_context._physics_accumulator = 0.0f;
-  game_frame_context._fixed_timestep = fixed_timestep;
-  game_frame_context._alpha_rendering = 0.0f;
-  game_frame_context._last_frame_time = SDL_GetTicks ();
+  game_frame_context.renderer_context = &game_renderer_context;
+  game_frame_context.physics_accumulator = 0.0f;
+  game_frame_context.fixed_timestep = fixed_timestep;
+  game_frame_context.alpha_rendering = 0.0f;
+  game_frame_context.last_frame_time = SDL_GetTicks ();
 }
 
 static void
@@ -115,33 +112,22 @@ run ()
   SDL_Event event;
 
   // TEMP PROTOTYPE
-  hyper::renderer_init (static_cast<f32> (game_config.resolution._width),
-                        static_cast<f32> (game_config.resolution._height));
+  stellar::Camera game_camera;
+  game_camera.x = 0.0f;
+  game_camera.y = 0.0f;
+  game_camera.zoom = 1.0f;
 
-  stellar::camera game_camera;
-
-  // NOTE: these values aren't random, especially the height. The
-  // height is picked so that it maintains the same aspect ratio 4:3
-  game_camera.fov._width = 5000.0f;
-  game_camera.fov._height = 3750.0f;
-  // In world space
-  game_camera.position._x = 0.0f;
-  game_camera.position._y = 0.0f;
-
-  stellar::world game_world;
-  game_world._width = 100'000.0f;
-  game_world._height = 100'000.0f;
-  game_world._meters_per_pixel = game_camera.fov._width / static_cast<f32> (game_config.resolution._width);
+  stellar::World game_world;
+  game_world.width = 100'000.0f;
+  game_world.height = 100'000.0f;
+  // game_world.meters_per_pixel = game_camera.fov.width / static_cast<f32> (game_config.resolution.width);
   // END PROTOTYPE
 
-  while (game_state._running)
+  while (game_state.running)
     {
-#if 0
+#if DEBUG
       if (stellar::hot_reload_library_was_updated ())
-        {
-          stellar::hot_reload_load (game_logic_shared_library);
-          hyper::renderer_init (game_config.resolution._width, game_config.resolution._height);
-        }
+        stellar::hot_reload_load (game_logic_shared_library);
 #endif
       u64 const current_time = SDL_GetTicks ();
       f32 frame_time = (f32) (current_time - last_time) / 1000.0f;
@@ -163,13 +149,13 @@ run ()
           fps_update_time = current_time;
         }
 
-      game_frame_context._physics_accumulator += frame_time;
+      game_frame_context.physics_accumulator += frame_time;
 
       while (SDL_PollEvent (&event))
         {
           if (event.type == SDL_EVENT_QUIT)
             {
-              game_state._running = false;
+              game_state.running = false;
               break;
             }
 
@@ -180,12 +166,18 @@ run ()
               switch (key)
                 {
                 case SDLK_ESCAPE:
-                  game_state._running = false;
+                  game_state.running = false;
                   break;
                 case SDLK_Q:
                   break;
                 case SDLK_F1:
                   toggle_vsync ();
+                  break;
+                case SDLK_F2:
+                  game_camera.zoom = hyper::min (game_camera.zoom + 0.05f, 2.0f);
+                  break;
+                case SDLK_F3:
+                  game_camera.zoom = hyper::max (game_camera.zoom - 0.05f, 1.0f);
                   break;
                 default:
                   break;
@@ -194,19 +186,22 @@ run ()
         }
 
       // fixed timestep physics and logic updates
-      while (game_frame_context._physics_accumulator >= game_frame_context._fixed_timestep)
+      while (game_frame_context.physics_accumulator >= game_frame_context.fixed_timestep)
         {
 
-          game_logic_shared_library._update (game_frame_context);
-          game_frame_context._physics_accumulator -= game_frame_context._fixed_timestep;
+          game_logic_shared_library.update (game_frame_context);
+          game_frame_context.physics_accumulator -= game_frame_context.fixed_timestep;
         }
 
       // render as fast as possible with interpolation
-      game_frame_context._alpha_rendering = game_frame_context._physics_accumulator / game_frame_context._fixed_timestep;
-      game_logic_shared_library._render (game_frame_context);
+      game_renderer_context.camera_x = game_camera.x;
+      game_renderer_context.camera_y = game_camera.y;
+      game_renderer_context.camera_zoom = game_camera.zoom;
+      game_frame_context.alpha_rendering = game_frame_context.physics_accumulator / game_frame_context.fixed_timestep;
+      game_logic_shared_library.render (game_frame_context);
 
       // copy my updated framebuffer to the SDL texture
-      SDL_UpdateTexture (sdl_texture, nullptr, game_framebuffer._pixels.data (), game_framebuffer._pitch);
+      SDL_UpdateTexture (sdl_texture, nullptr, game_framebuffer.pixels.data (), game_framebuffer.pitch);
 
       SDL_RenderClear (sdl_renderer);
       SDL_RenderTexture (sdl_renderer, sdl_texture, nullptr, nullptr);

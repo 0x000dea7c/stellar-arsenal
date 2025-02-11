@@ -1,12 +1,12 @@
+//
+// Game software renderer. All routines here use the CPU, not the GPU.
+// Since the game is in 2D exclusively, I'm working exclusively with
+// world and screen coordinates.
+//
 #include "hyper_renderer.hh"
 
 #include <immintrin.h>
 #include <cassert>
-
-// FIXME: these need to get passed as arguments!
-static hyper::mat4 perspective;
-static f32 screen_width;
-static f32 screen_height;
 
 namespace hyper
 {
@@ -17,9 +17,9 @@ namespace hyper
   }
 
   static inline void
-  colourise_pixel (framebuffer *framebuffer, i32 x, i32 y, u32 colour)
+  colourise_pixel (Framebuffer *framebuffer, i32 x, i32 y, u32 colour)
   {
-    framebuffer->_pixels[y * framebuffer->_width + x] = colour;
+    framebuffer->pixels[y * framebuffer->width + x] = colour;
   }
 
   static inline void
@@ -35,7 +35,7 @@ namespace hyper
   }
 
   static void
-  draw_horizontal_line_bresenham (framebuffer *framebuffer, vec2<i32> p0, vec2<i32> p1, u32 colour, i32 dx, i32 dy, i32 dy_abs)
+  draw_horizontal_line_bresenham (Framebuffer *framebuffer, Vec2<i32> p0, Vec2<i32> p1, u32 colour, i32 dx, i32 dy, i32 dy_abs)
   {
     if (p1.x < p0.x)
       {
@@ -67,7 +67,7 @@ namespace hyper
   }
 
   static void
-  draw_vertical_line_bresenham (framebuffer *framebuffer, vec2<i32> p0, vec2<i32> p1, u32 colour, i32 dx, i32 dy, i32 dy_abs)
+  draw_vertical_line_bresenham (Framebuffer *framebuffer, Vec2<i32> p0, Vec2<i32> p1, u32 colour, i32 dx, i32 dy, i32 dy_abs)
   {
     hyper::swap (p0.x, p0.y);
     hyper::swap (p1.x, p1.y);
@@ -103,7 +103,7 @@ namespace hyper
   }
 
   static void
-  draw_line_bresenham (framebuffer *framebuffer, vec2<i32> p0, vec2<i32> p1, u32 colour)
+  draw_line_bresenham (Framebuffer *framebuffer, Vec2<i32> p0, Vec2<i32> p1, u32 colour)
   {
     i32 const dx = p1.x - p0.x;
     i32 const dy = p1.y - p0.y;
@@ -112,22 +112,19 @@ namespace hyper
     bool const steep = dy_abs > dx_abs;
 
     if (steep)
-      {
-        draw_vertical_line_bresenham (framebuffer, p0, p1, colour, dx, dy, dy_abs);
-        return;
-      }
-
-    draw_horizontal_line_bresenham (framebuffer, p0, p1, colour, dx, dy, dy_abs);
+      draw_vertical_line_bresenham (framebuffer, p0, p1, colour, dx, dy, dy_abs);
+    else
+      draw_horizontal_line_bresenham (framebuffer, p0, p1, colour, dx, dy, dy_abs);
   }
 
   static void
-  draw_line_pixels (framebuffer *framebuffer, vec2<i32> p0, vec2<i32> p1, u32 colour)
+  draw_line_pixels (Framebuffer *framebuffer, Vec2<i32> p0, Vec2<i32> p1, u32 colour)
   {
     draw_line_bresenham (framebuffer, p0, p1, colour);
   }
 
   static void
-  draw_triangle_outline_pixels (framebuffer *framebuffer, std::array<vec2<i32>, 3> const& triangle, u32 colour)
+  draw_triangle_outline_pixels (Framebuffer *framebuffer, std::array<Vec2<i32>, 3> const& triangle, u32 colour)
   {
     draw_line_pixels (framebuffer, triangle[0], triangle[1], colour);
     draw_line_pixels (framebuffer, triangle[1], triangle[2], colour);
@@ -135,74 +132,37 @@ namespace hyper
   }
 
   void
-  renderer_init (f32 width, f32 height)
+  set_background_colour (Renderer_context *context, Colour colour)
   {
-    perspective = hyper::orthographic (0.0f, width, height, 0.0f, -1.0f, 1.0f);
-    screen_width = width;
-    screen_height = height;
-  }
-
-  void
-  set_background_colour (renderer_context *context, colour colour)
-  {
-    colourise_pixels_unaligned_simd (context->_framebuffer->_pixels.data (),
+    colourise_pixels_unaligned_simd (context->framebuffer->pixels.data (),
                                      get_colour_uint (colour),
-                                     context->_framebuffer->_simd_chunks);
+                                     context->framebuffer->simd_chunks);
   }
 
   void
-  draw ([[maybe_unused]] renderer_context *context)
+  draw ([[maybe_unused]] Renderer_context *context)
   {
   }
 
   void
-  draw_triangle_outline (renderer_context *context, std::array<vec2<f32>, 3> const &triangle, colour colour)
+  draw_triangle_outline (Renderer_context *context, std::array<Vec2<f32>, 3> const &triangle, Colour colour)
   {
-    assert (screen_height != 0.0f);
-
-    // TODO: assume camera is always at (0, 0)
-    std::array<vec4<f32>, 3> triangle_screen_coordinates = {
-      vec4<f32>{ triangle[0].x, triangle[0].y, 0.0f, 1.0f },
-      vec4<f32>{ triangle[1].x, triangle[1].y, 0.0f, 1.0f },
-      vec4<f32>{ triangle[2].x, triangle[2].y, 0.0f, 1.0f }
-    };
-
-    // Transform to NDC (multiply by perspective matrix and perspective divide)
-    for (size_t i = 0; i < 3; ++i)
-      triangle_screen_coordinates[i] = mat4_vec4_mul (perspective, triangle_screen_coordinates[i]);
-
-    for (size_t i = 0; i < 3; ++i)
+    // World to screen transformation
+    std::array<Vec2<f32>, 3> triangle_screen_coordinates;
+    for (size_t i = 0; i < triangle.size (); ++i)
       {
-        triangle_screen_coordinates[i].x /= triangle_screen_coordinates[i].w;
-        triangle_screen_coordinates[i].y /= triangle_screen_coordinates[i].w;
+        triangle_screen_coordinates[i].x = (triangle[i].x - context->camera_x) * context->camera_zoom + context->screen_width;
+        triangle_screen_coordinates[i].y = (triangle[i].y - context->camera_y) * context->camera_zoom + context->screen_height;
       }
 
-    // Transform NDC to screen space (assume top left is 0, 0)
-    // [-1, 1] in X maps to [0, screen_width]
-    // [-1, 1] in Y maps to [screen_height, 0]
-    for (size_t i = 0; i < 3; ++i)
+    // Screen to pixels
+    std::array<Vec2<i32>, 3> triangle_pixel_coordinates;
+    for (size_t i = 0; i < triangle_pixel_coordinates.size (); ++i)
       {
-        triangle_screen_coordinates[i].x = (triangle_screen_coordinates[i].x + 1.0f) * 0.5f * screen_width;
-        triangle_screen_coordinates[i].y = (triangle_screen_coordinates[i].y - 1.0f) * 0.5f * screen_height;
+        triangle_pixel_coordinates[i].x = static_cast<u32> (hyper::floor (triangle_screen_coordinates[i].x));
+        triangle_pixel_coordinates[i].y = static_cast<u32> (hyper::floor (triangle_screen_coordinates[i].y));
       }
 
-    // TODO: clip, but assume this case fits for now
-
-    // Call routines to draw with integers, not floating points I have
-    // a horizontal array of pixels. The left edge of the leftmost
-    // pixel is 0.0; the center of this pixel is 0.5. So:
-    // d = floor (c)
-    // c = d + 0.5
-    // d -> discrete integer index of the pixel
-    // c -> continuous (floating point) value within the pixel
-    std::array<vec2<i32>, 3> triangle_pixels;
-
-    for (size_t i = 0; i < 3; ++i)
-      {
-        triangle_pixels[i].x = static_cast<i32> (hyper::floor (triangle_screen_coordinates[i].x));
-        triangle_pixels[i].y = static_cast<i32> (hyper::floor (triangle_screen_coordinates[i].y));
-      }
-
-    draw_triangle_outline_pixels (context->_framebuffer, triangle_pixels, get_colour_uint (colour));
+    draw_triangle_outline_pixels (context->framebuffer, triangle_pixel_coordinates, get_colour_uint (colour));
   }
 };

@@ -4,41 +4,35 @@
 
 namespace stellar
 {
-  struct config
+  struct Config
   {
-    f32 _target_fps;
+    f32 target_fps;
     struct
     {
-      i32 _width;
-      i32 _height;
+      i32 width;
+      i32 height;
     } resolution;
-    bool _vsync;
+    bool vsync;
   };
 
-  // NOTE: everything is on meters
-  struct world
+  struct World
   {
-    f32 _width;
-    f32 _height;
-    f32 _meters_per_pixel;
+    f32 width;
+    f32 height;
+    f32 meters_per_pixel;
   };
 
-  struct camera
+  struct Camera
   {
-    struct
-    {
-      f32 _width;
-      f32 _height;
-    } fov;
-    struct
-    {
-      f32 _x;
-      f32 _y;
-    } position;
+    // Center of the view in world space
+    f32 x;
+    f32 y;
+    // Scales the world coordinates to screen coordinates
+    f32 zoom;
   };
 
-  struct state
+  struct State
   {
-    bool _running;
+    bool running;
   };
 };

@@ -5,7 +5,7 @@
 
 namespace hyper
 {
-  struct fixed_memory_resource_bad_alloc : public std::bad_alloc
+  struct Fixed_memory_resource_bad_alloc : public std::bad_alloc
   {
     char const *
     what () const noexcept override
@@ -14,13 +14,13 @@ namespace hyper
     }
   };
 
-  class fixed_memory_resource : public std::pmr::memory_resource
+  class Fixed_memory_resource : public std::pmr::memory_resource
   {
   protected:
     void *
     do_allocate ([[maybe_unused]] size_t bytes, [[maybe_unused]] size_t alignment) override
     {
-      throw fixed_memory_resource_bad_alloc ();
+      throw Fixed_memory_resource_bad_alloc ();
     }
 
     void

@@ -9,7 +9,7 @@
 
 namespace hyper
 {
-  enum class shape
+  enum class Shape
     {
       triangle,
       line,
@@ -17,37 +17,31 @@ namespace hyper
       circle
     };
 
-  struct vertex_buffer
+  struct Framebuffer
   {
-    vec3<f32> _positions;
-    vec2<f32> _normals;
-    vec2<f32> _texture_coordinates;
-    vec4<f32> _colours;
-    u32 _count;
-    shape _shape;
+    std::pmr::vector<u32> pixels;
+    size_t simd_chunks;
+    i32 width;
+    i32 height;
+    i32 pitch;
   };
 
-  struct framebuffer
+  struct Renderer_context
   {
-    std::pmr::vector<u32> _pixels;
-    size_t _simd_chunks;
-    i32 _width;
-    i32 _height;
-    i32 _pitch;
+    Framebuffer *framebuffer;
+    f32 camera_x;
+    f32 camera_y;
+    f32 camera_zoom;
+    f32 screen_width;
+    f32 screen_height;
   };
 
-  struct renderer_context
+  struct Frame_context
   {
-    framebuffer *_framebuffer;
-    vertex_buffer *_vertex_buffer;
-  };
-
-  struct frame_context
-  {
-    renderer_context *_renderer_context;
-    u64 _last_frame_time;
-    f32 _fixed_timestep;
-    f32 _physics_accumulator;
-    f32 _alpha_rendering;
+    Renderer_context *renderer_context;
+    u64 last_frame_time;
+    f32 fixed_timestep;
+    f32 physics_accumulator;
+    f32 alpha_rendering;
   };
 };
