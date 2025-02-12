@@ -319,7 +319,7 @@ namespace hyper
     // Screen to pixels
     i32 const circle_pixel_coordinates_x = static_cast<i32> (hyper::floor (circle_screen_coordinates_x));
     i32 const circle_pixel_coordinates_y = static_cast<i32> (hyper::floor (circle_screen_coordinates_y));
-    i32 const radius_pixels = static_cast<i32> (radius * context->meters_per_pixel);
+    i32 const radius_pixels = static_cast<i32> (radius * context->meters_per_pixel * context->camera_zoom);
 
     // Start at the top!
     Vec2<i32> current = { 0, radius_pixels };
@@ -353,7 +353,7 @@ namespace hyper
     // Screen to pixels
     i32 const circle_pixel_coordinates_x = static_cast<i32> (hyper::floor (circle_screen_coordinates_x));
     i32 const circle_pixel_coordinates_y = static_cast<i32> (hyper::floor (circle_screen_coordinates_y));
-    i32 const radius_pixels = static_cast<i32> (radius * context->meters_per_pixel);
+    i32 const radius_pixels = static_cast<i32> (radius * context->meters_per_pixel * context->camera_zoom);
 
     u32 const colour_uint = get_colour_uint (colour);
     i32 const radius_squared = radius_pixels * radius_pixels;
@@ -373,6 +373,58 @@ namespace hyper
         i32 const x_end = hyper::min (circle_pixel_coordinates_x + width, context->framebuffer->width - 1);
 
         for (i32 x = x_start; x <= x_end; ++x)
+          set_pixel_colour (context->framebuffer, x, y, colour_uint);
+      }
+  }
+
+  void
+  draw_line (Renderer_context *context, Vec2<f32> const &start, Vec2<f32> const&end, Colour colour)
+  {
+    u32 const colour_uint = get_colour_uint (colour);
+
+    // World to screen transformation
+    Vec2<f32> line_start_screen_coordinates;
+    line_start_screen_coordinates.x = (start.x - context->camera_x) * context->camera_zoom + (static_cast<f32> (context->framebuffer->width >> 1));
+    line_start_screen_coordinates.y = (start.y - context->camera_y) * context->camera_zoom + (static_cast<f32> (context->framebuffer->height >> 1));
+
+    // Screen to pixels
+    Vec2<f32> line_end_screen_coordinates;
+    line_end_screen_coordinates.x = (end.x - context->camera_x) * context->camera_zoom + (static_cast<f32> (context->framebuffer->width >> 1));
+    line_end_screen_coordinates.y = (end.y - context->camera_y) * context->camera_zoom + (static_cast<f32> (context->framebuffer->height >> 1));
+
+    Vec2<i32> line_start_pixel_coordinates;
+    line_start_pixel_coordinates.x = static_cast<i32> (hyper::floor (line_start_screen_coordinates.x));
+    line_start_pixel_coordinates.y = static_cast<i32> (hyper::floor (line_start_screen_coordinates.y));
+
+    Vec2<i32> line_end_pixel_coordinates;
+    line_end_pixel_coordinates.x = static_cast<i32> (hyper::floor (line_end_screen_coordinates.x));
+    line_end_pixel_coordinates.y = static_cast<i32> (hyper::floor (line_end_screen_coordinates.y));
+
+    draw_line_pixels (context->framebuffer, line_start_pixel_coordinates, line_end_pixel_coordinates, colour_uint);
+  }
+
+  void draw_quad_filled (Renderer_context *context, Vec2<f32> const &point, f32 width, f32 height, Colour colour)
+  {
+    u32 const colour_uint = get_colour_uint (colour);
+
+    // World to screen transformation
+    f32 const quad_screen_coordinates_x = (point.x - context->camera_x) * context->camera_zoom + (static_cast<f32> (context->framebuffer->width >> 1));
+    f32 const quad_screen_coordinates_y = (point.y - context->camera_y) * context->camera_zoom + (static_cast<f32> (context->framebuffer->height >> 1));
+
+    // Screen to pixels
+    i32 const quad_pixel_coordinates_x = static_cast<i32> (hyper::floor (quad_screen_coordinates_x));
+    i32 const quad_pixel_coordinates_y = static_cast<i32> (hyper::floor (quad_screen_coordinates_y));
+    i32 const width_pixels = static_cast<i32> (width * context->meters_per_pixel * context->camera_zoom);
+    i32 const height_pixels = static_cast<i32> (height * context->meters_per_pixel * context->camera_zoom);
+
+    i32 const x_start = hyper::max (quad_pixel_coordinates_x, 0);
+    i32 const y_start = hyper::max (quad_pixel_coordinates_y, 0);
+    i32 const y_max = hyper::min (quad_pixel_coordinates_y + height_pixels, context->framebuffer->height - 1);
+    i32 const x_max = hyper::min (quad_pixel_coordinates_x + width_pixels, context->framebuffer->width - 1);
+
+    for (i32 y = y_start; y <= y_max; ++y)
+      {
+        for (i32 x = x_start; x <= x_max; ++x)
           set_pixel_colour (context->framebuffer, x, y, colour_uint);
       }
   }

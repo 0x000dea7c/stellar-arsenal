@@ -11,6 +11,7 @@
 #include "stellar_hot_reload.hh"
 #include "stellar_game_logic.hh"
 #include "hyper_stack_arena.hh"
+#include "hyper_geometry.hh"
 
 static void quit ();
 
@@ -36,10 +37,9 @@ static hyper::Framebuffer game_framebuffer;
 static hyper::Renderer_context game_renderer_context;
 static hyper::Frame_context game_frame_context;
 static stellar::Hot_reload_library_data game_logic_shared_library;
-static std::array<hyper::Vec2<f32>, 1024> game_background_stars;
 static stellar::World game_world;
 static stellar::Camera game_camera;
-static hyper::Game_data game_data;
+static stellar::Game_data game_data;
 
 // Internal functions
 [[noreturn]] static void
@@ -64,7 +64,7 @@ init (std::pmr::monotonic_buffer_resource &game_linear_arena, hyper::Stack_arena
   game_config.resolution.width = 1024;
   game_config.resolution.height = 768;
   game_config.target_fps = fixed_timestep;
-  game_config.vsync = true;
+  game_config.vsync = false;
   game_state.running = true;
 
   // Initialise SDL stuff using game's config
@@ -125,14 +125,105 @@ init (std::pmr::monotonic_buffer_resource &game_linear_arena, hyper::Stack_arena
   std::mt19937 generator (random_seed ());
   std::uniform_real_distribution<f32> distribution_x (0, game_world.width);
   std::uniform_real_distribution<f32> distribution_y (0, game_world.height);
-  for (size_t i = 0; i < game_background_stars.size (); ++i)
+  for (size_t i = 0; i < game_data.stars.size (); ++i)
     {
-      game_background_stars[i].x = distribution_x (generator);
-      game_background_stars[i].y = distribution_y (generator);
+      game_data.stars[i].body.center.x = distribution_x (generator);
+      game_data.stars[i].body.center.y = distribution_y (generator);
+      game_data.stars[i].body.radius = 1.0f;
+      game_data.stars[i].colour = hyper::get_colour_from_preset (hyper::WHITE);
     }
 
-  game_data.stars.data = game_background_stars.data ();
-  game_data.stars.size = game_background_stars.size ();
+  // Initialise ship
+  game_data.ship.body.width = 20.0f;
+  game_data.ship.body.height = 20.0f;
+
+  game_data.ship.body.data.vertices[0] = { (game_world.width / 2.0f) - (game_data.ship.body.width / 2.0f),
+                                           (game_world.height / 2.0f) + (game_data.ship.body.height / 2.0f) };
+
+  game_data.ship.body.data.vertices[1] = { (game_world.width / 2.0f) + (game_data.ship.body.width / 2.0f),
+                                           (game_world.height / 2.0f) + (game_data.ship.body.height / 2.0f) };
+
+  game_data.ship.body.data.vertices[2] = { (game_world.width / 2.0f),
+                                           (game_world.height / 2.0f) - (game_data.ship.body.height / 2.0f) };
+
+  game_data.ship.body.colour = hyper::get_colour_from_preset (hyper::GREY);
+
+  // Left wing
+  game_data.ship.wings.left.vertices[0] = {
+    game_data.ship.body.data.vertices[2].x,
+    game_data.ship.body.data.vertices[2].y,
+  };
+
+  game_data.ship.wings.left.vertices[1] = {
+    game_data.ship.wings.left.vertices[0].x - 80.0f,
+    game_data.ship.wings.left.vertices[0].y + 70.0f
+  };
+
+  game_data.ship.wings.left.vertices[2] = {
+    game_data.ship.body.data.vertices[0].x,
+    game_data.ship.body.data.vertices[0].y,
+  };
+
+  // Right wing
+  game_data.ship.wings.right.vertices[0] = {
+    game_data.ship.body.data.vertices[2].x,
+    game_data.ship.body.data.vertices[2].y,
+  };
+
+  game_data.ship.wings.right.vertices[1] = {
+    game_data.ship.wings.right.vertices[0].x + 80.0f,
+    game_data.ship.wings.right.vertices[0].y + 70.0f
+  };
+
+  game_data.ship.wings.right.vertices[2] = {
+    game_data.ship.body.data.vertices[1].x,
+    game_data.ship.body.data.vertices[1].y,
+  };
+
+  game_data.ship.wings.colour = hyper::get_colour_from_preset (hyper::GREY);
+
+  // Cockpit
+  game_data.ship.cockpit.width = 10.0f;
+  game_data.ship.cockpit.height = 10.0f;
+
+  game_data.ship.cockpit.data.vertices[0] = {
+    game_data.ship.body.data.vertices[0].x + 5.0f,
+    game_data.ship.body.data.vertices[2].y + 3.0f,
+  };
+
+  game_data.ship.cockpit.data.vertices[1] = {
+    game_data.ship.cockpit.data.vertices[0].x + game_data.ship.cockpit.width,
+    game_data.ship.cockpit.data.vertices[0].y,
+  };
+
+  game_data.ship.cockpit.data.vertices[2] = {
+    game_data.ship.cockpit.data.vertices[0].x + game_data.ship.cockpit.width / 2.0f,
+    game_data.ship.cockpit.data.vertices[0].y - game_data.ship.cockpit.height,
+  };
+
+  game_data.ship.cockpit.colour = hyper::get_colour_from_preset (hyper::GREY);
+
+  // Thrusters
+  game_data.ship.thrusters.width = 5.0f;
+  game_data.ship.thrusters.height = 15.0f;
+
+  // Left
+  game_data.ship.thrusters.data[0] = {
+    { game_data.ship.wings.left.vertices[0].x - 70.0f,
+      game_data.ship.wings.left.vertices[0].y + 60.0f },
+    game_data.ship.thrusters.width,
+    game_data.ship.thrusters.height
+  };
+
+  // Right
+  game_data.ship.thrusters.data[1] = {
+    { game_data.ship.wings.right.vertices[0].x + 70.0f,
+      game_data.ship.wings.right.vertices[0].y + 60.0f },
+    game_data.ship.thrusters.width,
+    game_data.ship.thrusters.height
+  };
+
+  game_data.ship.thrusters.colour = hyper::get_colour_from_preset (hyper::GREY);
 }
 
 static void
@@ -145,7 +236,6 @@ run ()
   f32 current_fps = 0.0f;
   char window_title[32];
   SDL_Event event;
-
 
   while (game_state.running)
     {
@@ -198,10 +288,8 @@ run ()
                   toggle_vsync ();
                   break;
                 case SDLK_F2:
-                  game_camera.zoom = hyper::min (game_camera.zoom + 0.05f, 2.0f);
                   break;
                 case SDLK_F3:
-                  game_camera.zoom = hyper::max (game_camera.zoom - 0.05f, 0.5f);
                   break;
                 case SDLK_UP:
                   game_camera.y -= 150.0f * game_frame_context.fixed_timestep;

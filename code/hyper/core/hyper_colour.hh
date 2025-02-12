@@ -21,6 +21,7 @@ namespace hyper
       BLUE,
       PURPLE,
       OLIVE,
+      GREY,
 
       COUNT
     };
@@ -44,6 +45,8 @@ namespace hyper
         return { 0xA0, 0x20, 0xF0, 0xFF };
       case OLIVE:
         return { 0x80, 0x80, 0x00, 0xFF };
+      case GREY:
+        return { 0x80, 0x80, 0x80, 0xFF };
       default:
         return { 0x00, 0x00, 0x00, 0xFF };
       }

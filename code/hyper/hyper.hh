@@ -10,17 +10,6 @@
 
 namespace hyper
 {
-  // FIXME: this part should be decoupled, somehow!! I don't know how!
-  // This is the worst part of the engine
-  struct Game_data
-  {
-    struct
-    {
-      Vec2<f32> *data;
-      size_t size;
-    } stars;
-  };
-
   enum class Shape
     {
       triangle,

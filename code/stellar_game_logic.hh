@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hyper.hh"
+#include "stellar.hh"
 
 // NOTE: this file will be compiled into a shared library and will be
 // hot reloaded! Careful with what I put here, especially state
@@ -18,7 +19,7 @@
 
 extern "C"
 {
-  STELLAR_API void game_update (hyper::Frame_context &);
+  STELLAR_API void game_update (hyper::Frame_context &, stellar::Game_data &);
 
-  STELLAR_API void game_render (hyper::Frame_context &, hyper::Game_data &);
+  STELLAR_API void game_render (hyper::Frame_context &, stellar::Game_data &);
 }

@@ -17,4 +17,8 @@ namespace hyper
   void draw_circle_outline (Renderer_context *, f32, f32, f32, Colour);
 
   void draw_circle_filled (Renderer_context *, f32, f32, f32, Colour);
+
+  void draw_line (Renderer_context *, Vec2<f32> const &, Vec2<f32> const&, Colour);
+
+  void draw_quad_filled (Renderer_context *, Vec2<f32> const &, f32, f32, Colour);
 };

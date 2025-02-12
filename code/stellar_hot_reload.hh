@@ -1,10 +1,11 @@
 #pragma once
 
 #include "hyper.hh"
+#include "stellar.hh"
 
 namespace stellar
 {
-  using function_ptr_signature = void (*)(hyper::Frame_context &, hyper::Game_data &);
+  using function_ptr_signature = void (*)(hyper::Frame_context &, stellar::Game_data &);
 
   struct Hot_reload_library_data
   {
