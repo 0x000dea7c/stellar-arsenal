@@ -1,3 +1,3 @@
 (use-modules (guix profiles))
 
-(specifications->manifest '("gcc-toolchain" "make" "git" "sdl3"))
+(specifications->manifest '("gcc-toolchain" "make" "git" "sdl3" "gdb"))
